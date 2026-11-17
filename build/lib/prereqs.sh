@@ -9,12 +9,9 @@ check_tools() {
     for t in aapt javac java zipalign apksigner zip unzip python3 sha256sum zstd file mktemp; do
         need "$t"
     done
-    # herramientas del motor nativo: solo si no se omite la fase Rust
-    if [ "${DSH_SKIP_RUST:-0}" != "1" ]; then
-    for t in rustc clang patchelf; do
+    for t in rustc patchelf; do
         need "$t"
     done
-    fi
 
     [ -f "$CORE_SRC" ]                      || die "DeepSeek core archive not found: $CORE_SRC"
     [ -f "$CERTS_DIR/ca-certificates.crt" ] || die "CA bundle not found: $CERTS_DIR/ca-certificates.crt"

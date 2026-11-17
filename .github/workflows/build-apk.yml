@@ -61,14 +61,29 @@ jobs:
       - name: Instalar utilidades del build
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq zstd zip unzip file
-          for t in zstd zip unzip file python3; do printf '%-8s ' "$t"; command -v "$t" || echo FALTA; done
+          sudo apt-get install -y -qq zstd zip unzip file patchelf
+          for t in zstd zip unzip file python3 patchelf rustc; do printf '%-8s ' "$t"; command -v "$t" || echo FALTA; done
 
       - name: Verificar aapt, d8, apksigner, zipalign
         run: |
           for t in aapt aapt2 d8 apksigner zipalign; do
             printf '%-10s ' "$t"; command -v "$t" || echo "(FALTA)"
           done
+
+      - name: Preparar cadena cruzada ARM64
+        run: |
+          set -e
+          NDK="$(ls -d "$ANDROID_HOME"/ndk/* 2>/dev/null | sort -V | tail -1)"
+          if [ -z "$NDK" ]; then echo "::error::NDK no encontrado"; exit 1; fi
+          PRE="$NDK/toolchains/llvm/prebuilt/linux-x86_64"
+          echo "NDK: $NDK"
+          ls "$PRE/bin" | grep -c clang || true
+          rustup target add aarch64-linux-android
+          echo "DSH_NDK=$NDK" >> "$GITHUB_ENV"
+          echo "DSH_PREFIX=$PRE/sysroot/usr" >> "$GITHUB_ENV"
+          echo "DSH_CC=$PRE/bin/aarch64-linux-android28-clang" >> "$GITHUB_ENV"
+          echo "DSH_RUST_LINKER=$PRE/bin/aarch64-linux-android28-clang" >> "$GITHUB_ENV"
+          "$PRE/bin/aarch64-linux-android28-clang" --version | head -1
 
       - name: Generar keystore de firma
         env:
@@ -98,7 +113,11 @@ jobs:
 
       - name: Build (build.sh del repo)
         env:
-          DSH_SKIP_RUST: '1'
+          DSH_RUST_TARGET: aarch64-linux-android
+          DSH_API_LEVEL: '28'
+          DSH_CC: ${{ env.DSH_CC }}
+          DSH_RUST_LINKER: ${{ env.DSH_RUST_LINKER }}
+          PREFIX: ${{ env.DSH_PREFIX }}
           TMPDIR: ${{ runner.temp }}
           KEYSTORE: /tmp/release.keystore
           KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}

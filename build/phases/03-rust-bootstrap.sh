@@ -6,15 +6,6 @@
 
 log "[2/12] compile native Rust ARM64 JNI bootstrap engine (libds_bootstrap.so)"
 
-# [CI] El motor nativo se compila EN el dispositivo: necesita el prefijo de
-# Android (cabeceras Bionic) y un rustc con destino aarch64-linux-android.
-# En un runner x86_64 no es posible sin cadena de compilacion cruzada.
-# Sin este .so la app usa la extraccion en Java, mas lenta pero funcional.
-if [ "${DSH_SKIP_RUST:-0}" = "1" ]; then
-    log "[2/12] motor Rust OMITIDO (DSH_SKIP_RUST=1) — se usara extraccion Java"
-    return 0 2>/dev/null || exit 0
-fi
-
 RUST_BOOTSTRAP_DIR="$TOOLS_DIR/rust-bootstrap"
 PREBUILT_ZSTD="$RUST_BOOTSTRAP_DIR/prebuilt/arm64-v8a/libzstd.so"
 JNI_SHIM_C="$RUST_BOOTSTRAP_DIR/src/jni_shim.c"
@@ -24,6 +15,17 @@ RUST_LIB_RS="$RUST_BOOTSTRAP_DIR/src/lib.rs"
 [ -f "$JNI_SHIM_C" ]    || die "jni_shim.c missing: $JNI_SHIM_C"
 [ -f "$RUST_LIB_RS" ]   || die "lib.rs missing: $RUST_LIB_RS"
 
+# [CI] En el dispositivo se compila nativo; en CI se hace cadena cruzada
+# con el NDK, apuntando a aarch64-linux-android.
+RUST_TARGET="${DSH_RUST_TARGET:-}"
+CLANG_BIN="${DSH_CC:-clang}"
+RUST_LINKER="${DSH_RUST_LINKER:-}"
+CLANG_TARGET_ARGS=""
+if [ -n "$RUST_TARGET" ]; then
+    CLANG_TARGET_ARGS="--target=aarch64-linux-android${DSH_API_LEVEL:-28}"
+    log "  cadena cruzada: target=$RUST_TARGET clang=$CLANG_BIN"
+fi
+
 RUST_WORK_BASE="${TMPDIR:-${PREFIX:-/data/user/0/com.agy/files/usr}/tmp}"
 mkdir -p "$RUST_WORK_BASE"
 RUST_WORK="$(mktemp -d "$RUST_WORK_BASE/ds-rust-bootstrap.XXXXXX")"
@@ -32,12 +34,19 @@ trap 'rm -rf "$RUST_WORK"' EXIT
 SYS_INC="${PREFIX:-/data/user/0/com.agy/files/usr}/include"
 cp -f "$PREBUILT_ZSTD" "$RUST_WORK/libzstd.so"
 
-clang -O3 -fPIC -Wall -Wextra -Werror \
+$CLANG_BIN $CLANG_TARGET_ARGS -O3 -fPIC -Wall -Wextra -Werror \
     -I"$SYS_INC" \
     -c "$JNI_SHIM_C" \
     -o "$RUST_WORK/jni_shim.o"
 
+RUST_EXTRA=()
+if [ -n "$RUST_TARGET" ]; then
+    RUST_EXTRA+=(--target "$RUST_TARGET")
+    [ -n "$RUST_LINKER" ] && RUST_EXTRA+=(-C "linker=$RUST_LINKER")
+fi
+
 rustc --edition 2021 --crate-type cdylib \
+    "${RUST_EXTRA[@]}" \
     -C opt-level=3 \
     -C codegen-units=1 \
     -C lto=fat \
