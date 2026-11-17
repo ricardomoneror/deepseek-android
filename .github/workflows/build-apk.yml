@@ -58,6 +58,12 @@ jobs:
             exit 1
           fi
 
+      - name: Instalar utilidades del build
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq zstd zip unzip file
+          for t in zstd zip unzip file python3; do printf '%-8s ' "$t"; command -v "$t" || echo FALTA; done
+
       - name: Verificar aapt, d8, apksigner, zipalign
         run: |
           for t in aapt aapt2 d8 apksigner zipalign; do
@@ -92,6 +98,8 @@ jobs:
 
       - name: Build (build.sh del repo)
         env:
+          DSH_SKIP_RUST: '1'
+          TMPDIR: ${{ runner.temp }}
           KEYSTORE: /tmp/release.keystore
           KEYSTORE_PASSWORD: ${{ env.ANDROID_KEYSTORE_PASSWORD || secrets.ANDROID_KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ env.ANDROID_KEY_ALIAS || secrets.ANDROID_KEY_ALIAS }}

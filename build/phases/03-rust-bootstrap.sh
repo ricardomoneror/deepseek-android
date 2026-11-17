@@ -6,6 +6,15 @@
 
 log "[2/12] compile native Rust ARM64 JNI bootstrap engine (libds_bootstrap.so)"
 
+# [CI] El motor nativo se compila EN el dispositivo: necesita el prefijo de
+# Android (cabeceras Bionic) y un rustc con destino aarch64-linux-android.
+# En un runner x86_64 no es posible sin cadena de compilacion cruzada.
+# Sin este .so la app usa la extraccion en Java, mas lenta pero funcional.
+if [ "${DSH_SKIP_RUST:-0}" = "1" ]; then
+    log "[2/12] motor Rust OMITIDO (DSH_SKIP_RUST=1) — se usara extraccion Java"
+    return 0 2>/dev/null || exit 0
+fi
+
 RUST_BOOTSTRAP_DIR="$TOOLS_DIR/rust-bootstrap"
 PREBUILT_ZSTD="$RUST_BOOTSTRAP_DIR/prebuilt/arm64-v8a/libzstd.so"
 JNI_SHIM_C="$RUST_BOOTSTRAP_DIR/src/jni_shim.c"
