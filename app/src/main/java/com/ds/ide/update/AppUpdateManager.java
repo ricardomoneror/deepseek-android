@@ -50,7 +50,7 @@ import java.util.Set;
 
 /**
  * Native in-app auto-updater for DeepSeek for Android.
- * Checks GitHub Releases (Yhoanes/deepseek-android), downloads newer APKs
+ * Checks GitHub Releases (ricardomoneror/deepseek-android), downloads newer APKs
  * in the background with live progress, and installs silently via
  * rish (ADB Bridge / Shizuku) or via Android's standard PackageInstaller.
  */
@@ -65,7 +65,7 @@ public final class AppUpdateManager {
     public static final String STATE_READY = "ready";
 
     private static final String RELEASES_LATEST_URL =
-            "https://api.github.com/repos/Yhoanes/deepseek-android/releases/latest";
+            "https://api.github.com/repos/ricardomoneror/deepseek-android/releases/latest";
     private static final String USER_AGENT = "DeepSeek-Android-Updater/" + RuntimeConfig.CORE_VERSION;
     private static final long MIN_AUTO_CHECK_GAP_MS = 45_000L;
     private static final String UPDATES_CHANNEL_ID = "ds_updates_channel";
@@ -552,10 +552,10 @@ public final class AppUpdateManager {
         String lower = host.trim().toLowerCase(Locale.ROOT);
         String path = url.getPath() != null ? url.getPath() : "";
         if ("api.github.com".equals(lower)) {
-            return path.startsWith("/repos/Yhoanes/deepseek-android/");
+            return path.startsWith("/repos/ricardomoneror/deepseek-android/");
         }
         if ("github.com".equals(lower)) {
-            return path.startsWith("/Yhoanes/deepseek-android/");
+            return path.startsWith("/ricardomoneror/deepseek-android/");
         }
         return "objects.githubusercontent.com".equals(lower)
                 || "release-assets.githubusercontent.com".equals(lower);

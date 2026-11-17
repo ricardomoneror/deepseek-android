@@ -250,13 +250,8 @@ public final class EngineBridge {
 
     /** Returns bundled __ds_plugins_catalog.json directly from filesDir/web for 0-ms UI rendering. */
     public String getPluginsCatalogJson() {
-        File catFile = new File(runtime.getWebDir(), "__ds_plugins_catalog.json");
-        if (catFile.isFile()) {
-            try (FileInputStream fis = new FileInputStream(catFile)) {
-                return IoUtil.readAll(fis, "UTF-8");
-            } catch (Exception ignored) {
-            }
-        }
+        // [PARCHE hub-off] Catalogo desactivado: el hub descargaba zips de
+        // terceros y ejecutaba install-plugin.sh con DSH_HOME en el entorno.
         return "{\"plugins\":[]}";
     }
 

@@ -263,12 +263,11 @@ public final class AndroidBridge {
             emitPluginCallback(callbackId, "{\"ok\":false,\"error\":\"Unauthorized bridge request\"}");
             return;
         }
-        Thread worker = new Thread(() -> {
-            String raw = engine.installMarketplacePlugin(pluginName, archiveUrl, catalogId, marketplace, version);
-            emitPluginCallback(callbackId, raw);
-        }, "OcPluginInstall");
-        worker.setDaemon(true);
-        worker.start();
+        // [PARCHE hub-off] Instalacion de plugins de marketplace desactivada.
+        // Motivo: descargaba un zip remoto y ejecutaba install-plugin.sh con
+        // DSH_HOME en el entorno, dando acceso a sesiones y credenciales.
+        // El catalogo tambien se sirve vacio (EngineBridge.getPluginsCatalogJson).
+        emitPluginCallback(callbackId, "{\"ok\":false,\"error\":\"Plugin Hub desactivado en este build\"}");
     }
 
     @JavascriptInterface

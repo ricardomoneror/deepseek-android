@@ -84,7 +84,7 @@ public final class SplashController {
         setVisible();
         if (mode != MODE_TRANSIENT) {
             mode = MODE_TRANSIENT;
-            SplashOverlayHtml.show(view, "Restarting DeepSeek", message,
+            SplashOverlayHtml.show(view, tr("Reiniciando DeepSeek", "Restarting DeepSeek"), message,
                     foreground(), background(), false);
         }
     }
@@ -98,7 +98,7 @@ public final class SplashController {
         mode = MODE_ERROR;
         setVisible();
         SplashRetryBridge.bind(view, context, retryListener);
-        SplashOverlayHtml.show(view, "DeepSeek failed to start", message,
+        SplashOverlayHtml.show(view, tr("No se pudo iniciar DeepSeek", "DeepSeek failed to start"), message,
                 foreground(), background(), retryListener != null);
     }
 
@@ -156,4 +156,10 @@ public final class SplashController {
     private String background() {
         return theme.getBackgroundHex();
     }
+    /** [ES] Selecciona español o inglés según el idioma del dispositivo. */
+    private static String tr(String es, String en) {
+        String lang = java.util.Locale.getDefault().getLanguage();
+        return (lang != null && lang.startsWith("es")) ? es : en;
+    }
+
 }

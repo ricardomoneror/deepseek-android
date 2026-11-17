@@ -454,7 +454,7 @@ public class MainActivity extends Activity
             try {
                 Intent defaultIntent = fileChooserParams.createIntent();
                 if (defaultIntent != null) {
-                    chooserIntent = Intent.createChooser(defaultIntent, "Select Media / Files");
+                    chooserIntent = Intent.createChooser(defaultIntent, tr("Seleccionar archivos", "Select Media / Files"));
                 }
             } catch (Throwable t) {
                 Log.w(TAG, "fileChooserParams.createIntent failed: " + t.getMessage());
@@ -483,7 +483,7 @@ public class MainActivity extends Activity
                     contentIntent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
                 }
             }
-            chooserIntent = Intent.createChooser(contentIntent, "Select Media / Files");
+            chooserIntent = Intent.createChooser(contentIntent, tr("Seleccionar archivos", "Select Media / Files"));
         }
 
         try {
@@ -589,7 +589,8 @@ public class MainActivity extends Activity
                     && !android.os.Environment.isExternalStorageManager()) {
                 android.widget.Toast.makeText(
                         this,
-                        "Activa acceso a archivos para abrir carpetas del dispositivo",
+                        tr("Activa acceso a archivos para abrir carpetas del dispositivo",
+                                "Enable file access to open device folders"),
                         android.widget.Toast.LENGTH_LONG).show();
                 try {
                     Intent perm = new Intent(android.provider.Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION);
@@ -783,4 +784,10 @@ public class MainActivity extends Activity
             com.ds.ide.ui.download.FileDownloader.onPermissionResult(this, wv, requestCode, grantResults);
         }
     }
+    /** [ES] Selecciona español o inglés según el idioma del dispositivo. */
+    private static String tr(String es, String en) {
+        String lang = java.util.Locale.getDefault().getLanguage();
+        return (lang != null && lang.startsWith("es")) ? es : en;
+    }
+
 }

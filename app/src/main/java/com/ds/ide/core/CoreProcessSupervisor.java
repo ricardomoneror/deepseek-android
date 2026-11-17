@@ -212,8 +212,9 @@ public final class CoreProcessSupervisor {
                     CoreLogWriter.writeLine(log, "dsh web: [launch-token captured]");
                     continue;
                 }
-                Log.d(TAG, line);
-                CoreLogWriter.writeLine(log, line);
+                String safeLine = LogRedaction.redact(line);
+                Log.d(TAG, safeLine);
+                CoreLogWriter.writeLine(log, safeLine);
                 if (line.contains("[deepseek-account] android-oauth-complete")) {
                     Log.i(TAG, "OAuth completed in browser; bringing DeepSeek task to front");
                     com.ds.ide.oauth.OAuthCallbackActivity.bringAppToFront(appContext);
@@ -273,4 +274,60 @@ public final class CoreProcessSupervisor {
         }
         return sb.toString();
     }
+    /**
+     * [PARCHE redaccion] Enmascara credenciales en las lineas del log del core.
+     * El log se puede leer desde la interfaz, y los proveedores de inferencia a
+     * veces devuelven la clave en el mensaje de error. Werdio traia un
+     * LogRedactor que este fork elimino; esto restaura esa proteccion.
+     */
+    static final class LogRedaction {
+        private static final java.util.regex.Pattern[] RULES = {
+            // Claves conocidas por prefijo
+            java.util.regex.Pattern.compile("\\b(sk-[A-Za-z0-9_-]{8,})"),
+            java.util.regex.Pattern.compile("\\b(sk-or-v1-[A-Za-z0-9]{8,})"),
+            java.util.regex.Pattern.compile("\\b(gsk_[A-Za-z0-9]{8,})"),
+            java.util.regex.Pattern.compile("\\b(hf_[A-Za-z0-9]{8,})"),
+            java.util.regex.Pattern.compile("\\b(xai-[A-Za-z0-9]{8,})"),
+            java.util.regex.Pattern.compile("\\b(nvapi-[A-Za-z0-9_-]{8,})"),
+            java.util.regex.Pattern.compile("\\b(thk_[a-z]+_[A-Za-z0-9_-]{8,})"),
+            java.util.regex.Pattern.compile("\\b(abl_[A-Za-z0-9]{8,})"),
+            java.util.regex.Pattern.compile("\\b(coa_[A-Za-z0-9]{8,})"),
+            java.util.regex.Pattern.compile("\\b(oc_sk_[A-Za-z0-9]{8,})"),
+            // Authorization: Bearer <token>
+            java.util.regex.Pattern.compile("(?i)(bearer\\s+)[A-Za-z0-9._~+/-]{12,}"),
+            // Parametros de URL con token
+            java.util.regex.Pattern.compile("(?i)([?&](?:token|api_?key|access_token)=)[^&\\s\"]+"),
+            // Cabeceras de clave
+            java.util.regex.Pattern.compile("(?i)(x-api-key\\s*[:=]\\s*)[^\\s\",}]+"),
+        };
+
+        static String redact(String line) {
+            if (line == null || line.isEmpty()) {
+                return line;
+            }
+            String out = line;
+            try {
+                out = RULES[1].matcher(out).replaceAll("sk-or-v1-[REDACTED]");
+                out = RULES[0].matcher(out).replaceAll("sk-[REDACTED]");
+                out = RULES[2].matcher(out).replaceAll("gsk_[REDACTED]");
+                out = RULES[3].matcher(out).replaceAll("hf_[REDACTED]");
+                out = RULES[4].matcher(out).replaceAll("xai-[REDACTED]");
+                out = RULES[5].matcher(out).replaceAll("nvapi-[REDACTED]");
+                out = RULES[6].matcher(out).replaceAll("thk_[REDACTED]");
+                out = RULES[7].matcher(out).replaceAll("abl_[REDACTED]");
+                out = RULES[8].matcher(out).replaceAll("coa_[REDACTED]");
+                out = RULES[9].matcher(out).replaceAll("oc_sk_[REDACTED]");
+                out = RULES[10].matcher(out).replaceAll("$1[REDACTED]");
+                out = RULES[11].matcher(out).replaceAll("$1[REDACTED]");
+                out = RULES[12].matcher(out).replaceAll("$1[REDACTED]");
+            } catch (Throwable ignored) {
+                return out;
+            }
+            return out;
+        }
+
+        private LogRedaction() {
+        }
+    }
+
 }

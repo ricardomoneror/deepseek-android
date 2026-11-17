@@ -1,0 +1,135 @@
+name: Build APK (hardened)
+
+# Compila el APK en la nube, sin toolchain local.
+# Los runners de GitHub traen JDK + Android SDK build-tools preinstalados.
+#
+# Disparadores:
+#   - manual (workflow_dispatch)
+#   - tag v* (crea release con el APK)
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Etiqueta del release (ej: v0.2.2-r3-hardened)'
+        required: true
+        default: 'v0.2.2-r3-hardened'
+      make_release:
+        description: 'Crear release con el APK como asset'
+        type: boolean
+        default: true
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Verificar herramienta de build
+        run: |
+          echo "== JDK =="
+          java -version 2>&1 || true
+          echo "== build-tools disponibles =="
+          ls "$ANDROID_HOME/build-tools" 2>/dev/null || echo "ANDROID_HOME no definido; se usa el SDK del runner"
+          echo "ANDROID_HOME=${ANDROID_HOME:-<vacío>}"
+
+      - name: Preparar build-tools en PATH
+        run: |
+          set -e
+          SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          if [ -d "$SDK/build-tools" ]; then
+            BT=$(ls "$SDK/build-tools" | sort -V | tail -1)
+            echo "Usando build-tools $BT"
+            echo "$SDK/build-tools/$BT" >> "$GITHUB_PATH"
+            echo "$SDK/platform-tools" >> "$GITHUB_PATH"
+          else
+            echo "::error::No se encontro build-tools del SDK de Android"
+            exit 1
+          fi
+
+      - name: Verificar aapt, d8, apksigner, zipalign
+        run: |
+          for t in aapt aapt2 d8 apksigner zipalign; do
+            printf '%-10s ' "$t"; command -v "$t" || echo "(FALTA)"
+          done
+
+      - name: Generar keystore de firma
+        env:
+          KS_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASS: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -e
+          if [ -n "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" ]; then
+            echo "== Usando keystore de secrets =="
+            echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > /tmp/release.keystore
+          else
+            echo "::warning::Sin keystore en secrets: se genera uno efimero."
+            echo "::warning::Ese APK NO podra autoactualizarse despues (firma distinta)."
+            keytool -genkeypair -v \
+              -keystore /tmp/release.keystore \
+              -alias "${KEY_ALIAS:-hardened}" \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -storepass "${KS_PASS:-hardenedpass}" \
+              -keypass "${KEY_PASS:-hardenedpass}" \
+              -dname "CN=DSH Hardened, OU=Local, O=Local, L=Local, ST=Local, C=CL"
+            echo "ANDROID_KEY_ALIAS=${KEY_ALIAS:-hardened}" >> "$GITHUB_ENV"
+            echo "ANDROID_KEYSTORE_PASSWORD=${KS_PASS:-hardenedpass}" >> "$GITHUB_ENV"
+            echo "ANDROID_KEY_PASSWORD=${KEY_PASS:-hardenedpass}" >> "$GITHUB_ENV"
+          fi
+          ls -la /tmp/release.keystore
+
+      - name: Build (build.sh del repo)
+        env:
+          KEYSTORE: /tmp/release.keystore
+          KEYSTORE_PASSWORD: ${{ env.ANDROID_KEYSTORE_PASSWORD || secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ env.ANDROID_KEY_ALIAS || secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ env.ANDROID_KEY_PASSWORD || secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -e
+          chmod +x build.sh
+          # El build.sh del repo orquesta aapt -> javac -> d8 -> aapt -> zip -> zipalign -> apksigner
+          ./build.sh 2>&1 | tee /tmp/build.log
+          echo "== artefactos =="
+          ls -la dist/ || true
+
+      - name: Verificar APK firmado
+        run: |
+          set -e
+          APK=$(ls dist/*.apk 2>/dev/null | head -1)
+          if [ -z "$APK" ]; then echo "::error::No se genero APK"; exit 1; fi
+          echo "APK: $APK ($(du -h "$APK" | cut -f1))"
+          apksigner verify --verbose "$APK"
+
+      - name: Subir artefacto
+        uses: actions/upload-artifact@v4
+        with:
+          name: dsh-hardened-apk
+          path: dist/*.apk
+          retention-days: 30
+
+      - name: Crear release
+        if: github.event_name == 'push' || inputs.make_release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.tag_name || github.ref_name }}
+          name: DSH hardened ${{ inputs.tag_name || github.ref_name }}
+          body: |
+            Build propio con endurecimiento:
+            - Plugin Hub desactivado (no descarga ni ejecuta install-plugin.sh)
+            - OTA apuntando a este repositorio
+            - Firma propia (ancla de confianza local)
+          files: dist/*.apk
+          draft: false
+          prerelease: false
