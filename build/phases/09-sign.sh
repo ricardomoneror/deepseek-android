@@ -60,8 +60,10 @@ if [ ! -f "$SIGN_KS" ]; then
     fi
 fi
 
+# v1 y v2 activos: algunos instaladores (Huawei/HarmonyOS) rechazan APK
+# firmados solo con v3 y devuelven "error al analizar el paquete".
 apksigner sign \
-    --v1-signing-enabled false \
+    --v1-signing-enabled true \
     --v2-signing-enabled true \
     --v3-signing-enabled true \
     --ks "$SIGN_KS" \
