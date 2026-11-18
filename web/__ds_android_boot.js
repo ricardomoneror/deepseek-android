@@ -798,143 +798,160 @@
   });
 
 
-  // ---- Panel del fork en Configuración: versión, repositorio y actualización ----
+  // ---- Panel del fork en Configuración: versión, repo y actualización ----
   var FORK_REPO = "https://github.com/ricardomoneror/deepseek-android";
-  var forkPanelPuesto = false;
+
+  function leerEstado(host) {
+    try {
+      return JSON.parse(host.getUpdateStateJson ? host.getUpdateStateJson() : "{}") || {};
+    } catch (e) {
+      return {};
+    }
+  }
 
   function pintarPanelFork() {
     var host = getHost();
     if (!host) return;
+    if (document.getElementById("__ds_fork_panel")) return;
 
-    // busca la fila "Versión actual: ..." del panel de Configuración
+    // busca la fila "Versión actual: ..."
     var nodos = document.querySelectorAll("div, span, p");
     var fila = null;
     for (var i = 0; i < nodos.length; i++) {
       var t = nodos[i].textContent || "";
-      if (t.length > 8 && t.length < 70 && t.indexOf("Versión actual") === 0) {
-        fila = nodos[i];
-        break;
-      }
+      if (t.length > 8 && t.length < 70 && t.indexOf("Versión actual") === 0) { fila = nodos[i]; break; }
     }
     if (!fila) return;
-    if (document.getElementById("__ds_fork_panel")) return;
 
     var coreVer = (fila.textContent || "").replace("Versión actual:", "").trim();
     var forkVer = "";
     try { forkVer = host.getAppVersion ? host.getAppVersion() : ""; } catch (_) {}
 
-    // el contenedor que agrupa la fila, para insertar debajo
-    var cont = fila.parentElement || fila;
+    var motor = "?";
+    try {
+      var m = /Chrome\/([0-9.]+)/.exec(navigator.userAgent || "");
+      if (m) motor = m[1];
+    } catch (_) {}
 
     var caja = document.createElement("div");
     caja.id = "__ds_fork_panel";
     caja.style.cssText = [
-      "margin-top:10px",
-      "padding:10px 12px",
-      "border-radius:10px",
-      "border:1px solid rgba(255,255,255,.10)",
-      "background:rgba(255,255,255,.03)",
-      "font-size:12.5px",
-      "line-height:1.6",
+      "margin-top:10px", "padding:10px 12px", "border-radius:10px",
+      "border:1px solid rgba(255,255,255,.10)", "background:rgba(255,255,255,.03)",
+      "font-size:12.5px", "line-height:1.6",
     ].join(";");
 
-    var estado = document.createElement("div");
-    estado.id = "__ds_fork_estado";
-    estado.style.cssText = "opacity:.65;margin-top:4px";
-    estado.textContent = "Fork propio · auditoría y compilación propia";
-
+    // versiones
     var version = document.createElement("div");
     version.style.cssText = "opacity:.9";
     version.textContent = "Fork: " + (forkVer || "?") + "  ·  Core: " + (coreVer || "?");
+    caja.appendChild(version);
 
-    // version del WebView: determina si el streaming puede fallar
-    var motor = "";
-    try {
-      var ua = navigator.userAgent || "";
-      var m = /Chrome\/([0-9.]+)/.exec(ua);
-      motor = m ? m[1] : "?";
-    } catch (_) {}
     var uaLin = document.createElement("div");
-    uaLin.style.cssText = "opacity:.6;font-size:11.5px;margin-top:2px";
+    uaLin.style.cssText = "opacity:.55;font-size:11.5px;margin-top:2px";
     uaLin.textContent = "Motor WebView: Chrome " + motor;
+    caja.appendChild(uaLin);
 
+    // repositorio
     var enlace = document.createElement("a");
     enlace.href = FORK_REPO;
     enlace.target = "_blank";
     enlace.rel = "noopener";
     enlace.textContent = "github.com/ricardomoneror/deepseek-android";
-    enlace.style.cssText = "display:block;margin-top:2px;color:#7aa2f7;text-decoration:none;word-break:break-all";
-
-    var boton = document.createElement("button");
-    boton.textContent = "Buscar actualización";
-    boton.style.cssText = [
-      "margin-top:8px",
-      "padding:6px 12px",
-      "border-radius:8px",
-      "border:1px solid rgba(255,255,255,.16)",
-      "background:rgba(255,255,255,.06)",
-      "color:inherit",
-      "font:inherit",
-      "font-size:12.5px",
-      "cursor:pointer",
-    ].join(";");
-    boton.onclick = function () {
-      if (!host || !host.checkForAppUpdates) return;
-      boton.disabled = true;
-      boton.textContent = "Buscando…";
-      try { host.checkForAppUpdates(true); } catch (_) {}
-      var intentos = 0;
-      var t = setInterval(function () {
-        intentos++;
-        var st = null;
-        try { st = JSON.parse(host.getUpdateStateJson ? host.getUpdateStateJson() : "{}"); } catch (_) {}
-        var tipo = (st && st.type) || "idle";
-        if (tipo === "checking") return;
-        if (tipo === "available" || tipo === "downloading" || tipo === "ready") {
-          boton.textContent = tipo === "ready" ? "Lista: instalar en Complementos" : "Descargando…";
-          clearInterval(t);
-          return;
-        }
-        if (tipo === "error") {
-          boton.disabled = false;
-          boton.textContent = "Reintentar";
-          estado.textContent = "No se pudo comprobar: " + ((st && st.error) || "sin detalle");
-          clearInterval(t);
-          return;
-        }
-        if (intentos > 20) {
-          boton.disabled = false;
-          boton.textContent = "Buscar actualización";
-          estado.textContent = "Sin respuesta del actualizador";
-          clearInterval(t);
-          return;
-        }
-      }, 700);
-    };
-
-    caja.appendChild(version);
-    caja.appendChild(uaLin);
+    enlace.style.cssText = "display:block;margin-top:4px;color:#7aa2f7;text-decoration:none;word-break:break-all";
     caja.appendChild(enlace);
-    var btnTodo = document.createElement("button");
-    btnTodo.textContent = "Copiar conversación completa";
-    btnTodo.style.cssText = boton.style.cssText;
-    btnTodo.style.marginLeft = "6px";
-    btnTodo.onclick = function () {
-      var txt = "";
-      try { txt = copiarConversacion(); } catch (e) {}
-      copiarTexto(txt).then(function (ok) {
-        btnTodo.textContent = ok ? "Copiada ✓" : "No se pudo";
-        setTimeout(function () { btnTodo.textContent = "Copiar conversación completa"; }, 1600);
-      });
+
+    // estado de la actualización
+    var estadoLin = document.createElement("div");
+    estadoLin.style.cssText = "margin-top:6px;opacity:.85";
+    estadoLin.textContent = "Sin comprobar";
+    caja.appendChild(estadoLin);
+
+    // botones
+    var filaBtn = document.createElement("div");
+    filaBtn.style.cssText = "display:flex;gap:6px;margin-top:8px;flex-wrap:wrap";
+
+    var estiloBtn = [
+      "padding:6px 12px", "border-radius:8px", "border:1px solid rgba(255,255,255,.16)",
+      "background:rgba(255,255,255,.06)", "color:inherit", "font:inherit",
+      "font-size:12.5px", "cursor:pointer",
+    ].join(";");
+
+    var btnBuscar = document.createElement("button");
+    btnBuscar.textContent = "Buscar actualización";
+    btnBuscar.style.cssText = estiloBtn;
+
+    var btnInstalar = document.createElement("button");
+    btnInstalar.textContent = "Instalar";
+    btnInstalar.style.cssText = estiloBtn + ";" + "display:none;border-color:rgba(35,134,54,.7);background:rgba(35,134,54,.25)";
+
+    filaBtn.appendChild(btnBuscar);
+    filaBtn.appendChild(btnInstalar);
+    caja.appendChild(filaBtn);
+
+    // ---- refresco del estado ----
+    function refrescar() {
+      var st = leerEstado(host);
+      var tipo = st.type || "idle";
+      var remoto = (st.update && st.update.version) || st.version || "";
+      var inst = st.installedVersion || forkVer;
+
+      if (tipo === "checking") {
+        estadoLin.textContent = "Comprobando…";
+        btnBuscar.disabled = true;
+        btnInstalar.style.display = "none";
+        return;
+      }
+      if (tipo === "available") {
+        estadoLin.textContent = "Nueva versión " + (remoto || "?") + " disponible · descargando";
+        btnBuscar.disabled = false;
+        btnInstalar.style.display = "none";
+        return;
+      }
+      if (tipo === "downloading") {
+        var p = typeof st.progress === "number" ? " · " + st.progress + "%" : "";
+        estadoLin.textContent = "Descargando " + (remoto || "?") + p;
+        btnBuscar.disabled = true;
+        btnInstalar.style.display = "none";
+        return;
+      }
+      if (tipo === "ready") {
+        estadoLin.textContent = "Lista la versión " + (remoto || "?") + " · instalada " + (inst || "?");
+        btnBuscar.disabled = false;
+        btnInstalar.style.display = "";
+        btnInstalar.textContent = "Instalar " + (remoto || "");
+        return;
+      }
+      if (tipo === "error" || st.error) {
+        estadoLin.textContent = "Error: " + (st.error || st.result || "desconocido");
+        btnBuscar.disabled = false;
+        btnInstalar.style.display = "none";
+        return;
+      }
+      estadoLin.textContent = "Al día · instalada " + (inst || "?");
+      btnBuscar.disabled = false;
+      btnInstalar.style.display = "none";
+    }
+
+    btnBuscar.onclick = function () {
+      try { host.checkForAppUpdates(true); } catch (_) {}
+      setTimeout(refrescar, 400);
     };
 
-    caja.appendChild(boton);
-    caja.appendChild(btnTodo);
-    caja.appendChild(estado);
+    btnInstalar.onclick = function () {
+      try { host.applyAppUpdateAuth(BRIDGE_TOKEN); } catch (_) {}
+      setTimeout(refrescar, 600);
+    };
 
+    refrescar();
+    var reloj = setInterval(function () {
+      if (!document.body.contains(caja)) { clearInterval(reloj); return; }
+      refrescar();
+    }, 900);
+
+    var cont = fila.parentElement || fila;
     if (cont.parentElement) cont.parentElement.insertBefore(caja, cont.nextSibling);
     else cont.appendChild(caja);
-    forkPanelPuesto = true;
   }
 
   // reintenta mientras el diálogo de Configuración esté abierto
