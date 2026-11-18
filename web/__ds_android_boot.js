@@ -800,6 +800,58 @@
 
 
 
+
+  // ResizeObserver / IntersectionObserver — Chrome 64/51
+  // En WebView antiguos no existen; el cliente los usa para layout.
+  if (typeof ResizeObserver === "undefined") {
+    window.ResizeObserver = function () {
+      this.observe = function () {};
+      this.unobserve = function () {};
+      this.disconnect = function () {};
+    };
+  }
+  if (typeof IntersectionObserver === "undefined") {
+    window.IntersectionObserver = function (cb) {
+      this.observe = function (el) {
+        try { cb([{ isIntersecting: true, target: el, intersectionRatio: 1 }]); } catch (e) {}
+      };
+      this.unobserve = function () {};
+      this.disconnect = function () {};
+    };
+  }
+
+  // Array.prototype.at / findLast / toSorted — Chrome 92/97/110
+  if (!Array.prototype.at) {
+    Array.prototype.at = function (i) {
+      i = Number(i) || 0;
+      if (i < 0) i = this.length + i;
+      return (i >= 0 && i < this.length) ? this[i] : undefined;
+    };
+  }
+  if (!Array.prototype.findLast) {
+    Array.prototype.findLast = function (cb, thisArg) {
+      for (var i = this.length - 1; i >= 0; i--) if (cb.call(thisArg, this[i], i, this)) return this[i];
+      return undefined;
+    };
+  }
+  if (!Array.prototype.toSorted) {
+    Array.prototype.toSorted = function (cmp) {
+      return this.slice().sort(cmp);
+    };
+  }
+
+  // String.prototype.replaceAll — Chrome 85
+  if (!String.prototype.replaceAll) {
+    String.prototype.replaceAll = function (search, replace) {
+      if (search instanceof RegExp) {
+        if (!search.global) throw new TypeError("replaceAll requires a global regex");
+        return this.replace(search, replace);
+      }
+      return this.split(search).join(replace);
+    };
+  }
+
+
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", boot);
   } else {
