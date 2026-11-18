@@ -852,6 +852,17 @@
     uaLin.textContent = "Motor WebView: Chrome " + motor;
     caja.appendChild(uaLin);
 
+    // errores recientes del cliente
+    var errLin = document.createElement("div");
+    errLin.style.cssText = "margin-top:4px;font-size:11.5px;opacity:.7;white-space:pre-wrap;word-break:break-word";
+    function pintarErrores() {
+      var lista = (window.__ds_errores || []).slice(-3);
+      errLin.textContent = lista.length ? ("Errores: " + lista.join(" | ")) : "";
+    }
+    pintarErrores();
+    setInterval(pintarErrores, 1500);
+    caja.appendChild(errLin);
+
     // repositorio
     var enlace = document.createElement("a");
     enlace.href = FORK_REPO;
@@ -884,6 +895,12 @@
     var btnInstalar = document.createElement("button");
     btnInstalar.textContent = "Instalar";
     btnInstalar.style.cssText = estiloBtn + ";" + "display:none;border-color:rgba(35,134,54,.7);background:rgba(35,134,54,.25)";
+
+    var btnRecargar = document.createElement("button");
+    btnRecargar.textContent = "Recargar interfaz";
+    btnRecargar.style.cssText = estiloBtn;
+    btnRecargar.onclick = function () { try { location.reload(); } catch (e) {} };
+    filaBtn.appendChild(btnRecargar);
 
     filaBtn.appendChild(btnBuscar);
     filaBtn.appendChild(btnInstalar);
@@ -1098,6 +1115,25 @@
   } catch (e) {}
   programarMarcado();
   setInterval(programarMarcado, 2500);
+
+
+  // ---- Captura de errores para diagnosticar el renderizado ----
+  // Chrome 114 no tiene algunas APIs que el cliente usa. Cuando falla una
+  // promesa o un script, aqui queda registrado para poder verlo.
+  window.__ds_errores = [];
+  function __dsGuardarError(msg) {
+    try {
+      window.__ds_errores.push(String(msg).slice(0, 200));
+      if (window.__ds_errores.length > 6) window.__ds_errores.shift();
+    } catch (e) {}
+  }
+  window.addEventListener("error", function (e) {
+    __dsGuardarError((e && e.message ? e.message : "error") + " @ " + (e && e.lineno ? e.lineno : "?"));
+  });
+  window.addEventListener("unhandledrejection", function (e) {
+    var r = e && e.reason;
+    __dsGuardarError("promesa: " + (r && r.message ? r.message : String(r)).slice(0, 180));
+  });
 
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", boot);
