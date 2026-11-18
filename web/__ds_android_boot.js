@@ -915,7 +915,21 @@
     caja.appendChild(version);
     caja.appendChild(uaLin);
     caja.appendChild(enlace);
+    var btnTodo = document.createElement("button");
+    btnTodo.textContent = "Copiar conversación completa";
+    btnTodo.style.cssText = boton.style.cssText;
+    btnTodo.style.marginLeft = "6px";
+    btnTodo.onclick = function () {
+      var txt = "";
+      try { txt = copiarConversacion(); } catch (e) {}
+      copiarTexto(txt).then(function (ok) {
+        btnTodo.textContent = ok ? "Copiada ✓" : "No se pudo";
+        setTimeout(function () { btnTodo.textContent = "Copiar conversación completa"; }, 1600);
+      });
+    };
+
     caja.appendChild(boton);
+    caja.appendChild(btnTodo);
     caja.appendChild(estado);
 
     if (cont.parentElement) cont.parentElement.insertBefore(caja, cont.nextSibling);
@@ -927,6 +941,146 @@
   setInterval(function () {
     if (!document.getElementById("__ds_fork_panel")) pintarPanelFork();
   }, 1200);
+
+
+  // ---- Botones de copiar en los mensajes ----
+  // El cliente dibuja las burbujas del usuario con [data-message-bubble] y el
+  // texto del asistente dentro de [data-text-interaction-surface]. Se añade un
+  // botón por mensaje y otro para la conversación completa.
+  var copyMarcados = new WeakSet();
+
+  function copiarTexto(txt) {
+    if (!txt) return Promise.resolve(false);
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      return navigator.clipboard.writeText(txt).then(function () { return true; }).catch(function () {
+        return copiarTextoViejo(txt);
+      });
+    }
+    return Promise.resolve(copiarTextoViejo(txt));
+  }
+
+  function copiarTextoViejo(txt) {
+    try {
+      var ta = document.createElement("textarea");
+      ta.value = txt;
+      ta.style.cssText = "position:fixed;top:-1000px;left:-1000px;opacity:0";
+      document.body.appendChild(ta);
+      ta.select();
+      ta.setSelectionRange(0, txt.length);
+      var ok = document.execCommand("copy");
+      document.body.removeChild(ta);
+      return ok;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function textoDe(nodo) {
+    // innerText respeta los saltos de línea visibles
+    var t = nodo.innerText || nodo.textContent || "";
+    return t.trim();
+  }
+
+  function ponerBoton(bloque, textoDeNodo) {
+    if (copyMarcados.has(bloque)) return;
+    copyMarcados.add(bloque);
+
+    try {
+      var pos = getComputedStyle(bloque).position;
+      if (pos === "static") bloque.style.position = "relative";
+    } catch (e) {}
+
+    var b = document.createElement("button");
+    b.className = "__ds_copy";
+    b.type = "button";
+    b.title = "Copiar este mensaje";
+    b.setAttribute("aria-label", "Copiar");
+    b.textContent = "⧉";
+    b.style.cssText = [
+      "position:absolute",
+      "top:4px",
+      "right:6px",
+      "width:26px",
+      "height:26px",
+      "border-radius:7px",
+      "border:1px solid rgba(255,255,255,.14)",
+      "background:rgba(0,0,0,.45)",
+      "color:inherit",
+      "font-size:13px",
+      "line-height:1",
+      "cursor:pointer",
+      "opacity:.45",
+      "padding:0",
+      "z-index:5",
+      "-webkit-tap-highlight-color:transparent",
+    ].join(";");
+
+    b.onmouseenter = function () { b.style.opacity = "1"; };
+    b.onmouseleave = function () { b.style.opacity = ".45"; };
+    b.onclick = function (ev) {
+      ev.preventDefault();
+      ev.stopPropagation();
+      var txt = textoDeNodo(bloque);
+      copiarTexto(txt).then(function (ok) {
+        b.textContent = ok ? "✓" : "✕";
+        b.style.opacity = "1";
+        setTimeout(function () { b.textContent = "⧉"; b.style.opacity = ".45"; }, 1200);
+      });
+    };
+
+    bloque.appendChild(b);
+  }
+
+  function marcarMensajes() {
+    // burbujas del usuario
+    var usuarios = document.querySelectorAll("[data-message-bubble]");
+    for (var i = 0; i < usuarios.length; i++) {
+      var u = usuarios[i];
+      if (textoDe(u).length > 0) ponerBoton(u);
+    }
+    // texto del asistente: el contenedor de cada bloque de respuesta
+    var superficies = document.querySelectorAll("[data-text-interaction-surface]");
+    for (var j = 0; j < superficies.length; j++) {
+      var s = superficies[j];
+      if (textoDe(s).length > 0) ponerBoton(s);
+    }
+  }
+
+  function copiarConversacion() {
+    var flujo = document.querySelector("[data-chat-flow]") || document.body;
+    var partes = [];
+    var usuarios = flujo.querySelectorAll("[data-message-bubble]");
+    var todas = [];
+    for (var i = 0; i < usuarios.length; i++) todas.push(usuarios[i]);
+    todas.sort(function (a, b) {
+      return a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1;
+    });
+    var salida = [];
+    for (var k = 0; k < todas.length; k++) {
+      salida.push("### Ricardo\n\n" + textoDe(todas[k]) + "\n");
+    }
+    // el texto completo del flujo, sin los botones
+    var copia = flujo.cloneNode(true);
+    var botones = copia.querySelectorAll(".__ds_copy");
+    for (var m = 0; m < botones.length; m++) botones[m].remove();
+    return textoDe(copia);
+  }
+
+  var copyTimer = null;
+  function programarMarcado() {
+    if (copyTimer) return;
+    copyTimer = setTimeout(function () {
+      copyTimer = null;
+      try { marcarMensajes(); } catch (e) {}
+    }, 400);
+  }
+
+  try {
+    var copyObs = new MutationObserver(programarMarcado);
+    copyObs.observe(document.body, { childList: true, subtree: true });
+  } catch (e) {}
+  programarMarcado();
+  setInterval(programarMarcado, 2500);
 
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", boot);
