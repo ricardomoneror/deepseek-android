@@ -75,10 +75,47 @@
   }
 
   // structuredClone() — Chrome 98
+  // Se evita JSON.stringify: corrompe Date, Map, Set, ArrayBuffer y undefined,
+  // y eso puede dejar sin dibujar respuestas que si llegaron.
   if (typeof structuredClone !== "function") {
+    var clonar = function (v, vistos) {
+      if (v === null || typeof v !== "object") return v;
+      if (v instanceof Date) return new Date(v.getTime());
+      if (v instanceof RegExp) return new RegExp(v.source, v.flags);
+      if (typeof ArrayBuffer !== "undefined" && v instanceof ArrayBuffer) return v.slice(0);
+      if (typeof ArrayBuffer !== "undefined" && ArrayBuffer.isView && ArrayBuffer.isView(v)) {
+        try { return new v.constructor(v); } catch (e) { return v; }
+      }
+      if (vistos.has(v)) return vistos.get(v);
+      if (Array.isArray(v)) {
+        var arr = [];
+        vistos.set(v, arr);
+        for (var i = 0; i < v.length; i++) arr[i] = clonar(v[i], vistos);
+        return arr;
+      }
+      if (typeof Map !== "undefined" && v instanceof Map) {
+        var m = new Map();
+        vistos.set(v, m);
+        v.forEach(function (val, k) { m.set(clonar(k, vistos), clonar(val, vistos)); });
+        return m;
+      }
+      if (typeof Set !== "undefined" && v instanceof Set) {
+        var st = new Set();
+        vistos.set(v, st);
+        v.forEach(function (val) { st.add(clonar(val, vistos)); });
+        return st;
+      }
+      var out = {};
+      vistos.set(v, out);
+      var claves = Object.keys(v);
+      for (var k2 = 0; k2 < claves.length; k2++) {
+        var c = claves[k2];
+        out[c] = clonar(v[c], vistos);
+      }
+      return out;
+    };
     window.structuredClone = function (valor) {
-      if (valor === undefined) return undefined;
-      return JSON.parse(JSON.stringify(valor));
+      return clonar(valor, new Map());
     };
   }
 
@@ -810,6 +847,17 @@
     version.style.cssText = "opacity:.9";
     version.textContent = "Fork: " + (forkVer || "?") + "  ·  Core: " + (coreVer || "?");
 
+    // version del WebView: determina si el streaming puede fallar
+    var motor = "";
+    try {
+      var ua = navigator.userAgent || "";
+      var m = /Chrome\/([0-9.]+)/.exec(ua);
+      motor = m ? m[1] : "?";
+    } catch (_) {}
+    var uaLin = document.createElement("div");
+    uaLin.style.cssText = "opacity:.6;font-size:11.5px;margin-top:2px";
+    uaLin.textContent = "Motor WebView: Chrome " + motor;
+
     var enlace = document.createElement("a");
     enlace.href = FORK_REPO;
     enlace.target = "_blank";
@@ -865,6 +913,7 @@
     };
 
     caja.appendChild(version);
+    caja.appendChild(uaLin);
     caja.appendChild(enlace);
     caja.appendChild(boton);
     caja.appendChild(estado);
