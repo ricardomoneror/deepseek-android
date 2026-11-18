@@ -89,6 +89,14 @@
     };
   }
 })();
+(function(){
+  if (document.getElementById('__ds_oled')) return;
+  var s = document.createElement('style');
+  s.id = '__ds_oled';
+  s.textContent = "\n/* [OLED] Rampa oscura a negros reales. El tema de escritorio usa #151517,\n   que en un panel OLED se ve gris y gasta bateria. Se remapea solo en modo\n   oscuro; el modo claro no cambia. */\n[data-ds-dark-theme] {\n  --dsw-static-neutral-bluish-1000: #000000 !important;\n  --dsw-static-neutral-bluish-950: #000000 !important;\n  --dsw-static-neutral-bluish-900: #050506 !important;\n  --dsw-static-neutral-bluish-875: #0a0a0b !important;\n  --dsw-static-neutral-bluish-850: #101012 !important;\n  --dsw-static-neutral-bluish-800: #17171a !important;\n  --dsw-static-neutral-bluish-750: #202024 !important;\n  --dsw-static-neutral-bluish-700: #4a4d52 !important;\n}\nhtml[data-ds-dark-theme] body,\nbody[data-ds-dark-theme] {\n  background-color: #000000 !important;\n}\n";
+  (document.head || document.documentElement).appendChild(s);
+})();
+
 
 (function () {
   "use strict";
@@ -751,6 +759,125 @@
   document.addEventListener("visibilitychange", function () {
     if (document.visibilityState === "visible") onHostResume();
   });
+
+
+  // ---- Panel del fork en Configuración: versión, repositorio y actualización ----
+  var FORK_REPO = "https://github.com/ricardomoneror/deepseek-android";
+  var forkPanelPuesto = false;
+
+  function pintarPanelFork() {
+    var host = getHost();
+    if (!host) return;
+
+    // busca la fila "Versión actual: ..." del panel de Configuración
+    var nodos = document.querySelectorAll("div, span, p");
+    var fila = null;
+    for (var i = 0; i < nodos.length; i++) {
+      var t = nodos[i].textContent || "";
+      if (t.length > 8 && t.length < 70 && t.indexOf("Versión actual") === 0) {
+        fila = nodos[i];
+        break;
+      }
+    }
+    if (!fila) return;
+    if (document.getElementById("__ds_fork_panel")) return;
+
+    var coreVer = (fila.textContent || "").replace("Versión actual:", "").trim();
+    var forkVer = "";
+    try { forkVer = host.getAppVersion ? host.getAppVersion() : ""; } catch (_) {}
+
+    // el contenedor que agrupa la fila, para insertar debajo
+    var cont = fila.parentElement || fila;
+
+    var caja = document.createElement("div");
+    caja.id = "__ds_fork_panel";
+    caja.style.cssText = [
+      "margin-top:10px",
+      "padding:10px 12px",
+      "border-radius:10px",
+      "border:1px solid rgba(255,255,255,.10)",
+      "background:rgba(255,255,255,.03)",
+      "font-size:12.5px",
+      "line-height:1.6",
+    ].join(";");
+
+    var estado = document.createElement("div");
+    estado.id = "__ds_fork_estado";
+    estado.style.cssText = "opacity:.65;margin-top:4px";
+    estado.textContent = "Fork propio · auditoría y compilación propia";
+
+    var version = document.createElement("div");
+    version.style.cssText = "opacity:.9";
+    version.textContent = "Fork: " + (forkVer || "?") + "  ·  Core: " + (coreVer || "?");
+
+    var enlace = document.createElement("a");
+    enlace.href = FORK_REPO;
+    enlace.target = "_blank";
+    enlace.rel = "noopener";
+    enlace.textContent = "github.com/ricardomoneror/deepseek-android";
+    enlace.style.cssText = "display:block;margin-top:2px;color:#7aa2f7;text-decoration:none;word-break:break-all";
+
+    var boton = document.createElement("button");
+    boton.textContent = "Buscar actualización";
+    boton.style.cssText = [
+      "margin-top:8px",
+      "padding:6px 12px",
+      "border-radius:8px",
+      "border:1px solid rgba(255,255,255,.16)",
+      "background:rgba(255,255,255,.06)",
+      "color:inherit",
+      "font:inherit",
+      "font-size:12.5px",
+      "cursor:pointer",
+    ].join(";");
+    boton.onclick = function () {
+      if (!host || !host.checkForAppUpdates) return;
+      boton.disabled = true;
+      boton.textContent = "Buscando…";
+      try { host.checkForAppUpdates(true); } catch (_) {}
+      var intentos = 0;
+      var t = setInterval(function () {
+        intentos++;
+        var st = null;
+        try { st = JSON.parse(host.getUpdateStateJson ? host.getUpdateStateJson() : "{}"); } catch (_) {}
+        var tipo = (st && st.type) || "idle";
+        if (tipo === "checking") return;
+        if (tipo === "available" || tipo === "downloading" || tipo === "ready") {
+          boton.textContent = tipo === "ready" ? "Lista: instalar en Complementos" : "Descargando…";
+          clearInterval(t);
+          return;
+        }
+        if (tipo === "error") {
+          boton.disabled = false;
+          boton.textContent = "Reintentar";
+          estado.textContent = "No se pudo comprobar: " + ((st && st.error) || "sin detalle");
+          clearInterval(t);
+          return;
+        }
+        if (intentos > 20) {
+          boton.disabled = false;
+          boton.textContent = "Buscar actualización";
+          estado.textContent = "Sin respuesta del actualizador";
+          clearInterval(t);
+          return;
+        }
+      }, 700);
+    };
+
+    caja.appendChild(version);
+    caja.appendChild(enlace);
+    caja.appendChild(boton);
+    caja.appendChild(estado);
+
+    if (cont.parentElement) cont.parentElement.insertBefore(caja, cont.nextSibling);
+    else cont.appendChild(caja);
+    forkPanelPuesto = true;
+  }
+
+  // reintenta mientras el diálogo de Configuración esté abierto
+  setInterval(function () {
+    if (!document.getElementById("__ds_fork_panel")) pintarPanelFork();
+  }, 1200);
 
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", boot);
