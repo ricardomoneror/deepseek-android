@@ -70,6 +70,24 @@ jobs:
             printf '%-10s ' "$t"; command -v "$t" || echo "(FALTA)"
           done
 
+      - name: Aplicar version del build
+        run: |
+          set -e
+          TAG="${{ inputs.tag_name || github.ref_name }}"
+          # v0.2.2-r6-hardened -> 0.2.2-r6  (lo que espera el updater)
+          VER=$(echo "$TAG" | sed -E "s/^v//; s/-hardened$//")
+          MAJ=$(echo "$VER" | cut -d. -f1)
+          MIN=$(echo "$VER" | cut -d. -f2)
+          PAT=$(echo "$VER" | cut -d. -f3 | cut -d- -f1)
+          REV=$(echo "$VER" | sed -nE "s/.*-r([0-9]+).*/\1/p")
+          [ -z "$REV" ] && REV=0
+          # rev*10 para superar el 20214 del build original y seguir subiendo
+          CODE=$((MAJ*1000000 + MIN*10000 + PAT*100 + REV*10))
+          echo "tag=$TAG version=$VER code=$CODE"
+          sed -i "s/^VERSION_NAME=.*/VERSION_NAME=$VER/" config/app.env
+          sed -i "s/^VERSION_CODE=.*/VERSION_CODE=$CODE/" config/app.env
+          grep -E "VERSION_(NAME|CODE)=" config/app.env
+
       - name: Preparar cadena cruzada ARM64
         run: |
           set -e
